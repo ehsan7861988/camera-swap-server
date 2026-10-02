@@ -27,6 +27,7 @@ io.on('connection', (socket) => {
     }
 
     if (role === 'host') room.hostId = socket.id;
+    socket.emit('remote-list-update', Object.values(remoteDevices));
     else if (role === 'remote') room.remoteId = socket.id;
 
     if (room.hostId && room.remoteId) {
