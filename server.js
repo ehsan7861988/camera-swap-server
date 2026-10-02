@@ -49,6 +49,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('signal', (data) => {
+    console.log('Relaying signal:', data.signal.type, 'from', socket.id, 'to', data.targetId);
     if (data.targetId) {
       io.to(data.targetId).emit('signal', { 
         senderId: socket.id, 
