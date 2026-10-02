@@ -1,9 +1,12 @@
 const io = require('socket.io')(3000, { cors: { origin: "*" } });
 const rooms = new Map();
-let remoteDevices = {}; // Store available remote devices
+let remoteDevices = {}; 
 
 io.on('connection', (socket) => {
+  console.log('New client connected:', socket.id);
+
   socket.on('join-room', (data) => {
+    console.log('Received data:', data); 
     const roomId = data.roomId;
     const role = data.role;
     const deviceName = data.deviceName || 'Unknown Device';
@@ -14,7 +17,7 @@ io.on('connection', (socket) => {
 
     if (role === 'remote') {
       remoteDevices[socket.id] = { roomId: roomId, name: deviceName, socketId: socket.id };
-      io.emit('remote-list-update', Object.values(remoteDevices)); // Broadcast to all hosts
+      io.emit('remote-list-update', Object.values(remoteDevices));
     }
 
     let room = rooms.get(roomId);
@@ -39,8 +42,18 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
+    console.log('Client disconnected:', socket.id);
     delete remoteDevices[socket.id];
     io.emit('remote-list-update', Object.values(remoteDevices));
-    // ... (keep your existing room cleanup code here)
+    
+    const roomId = socket.roomId;
+    if (roomId) {
+      const room = rooms.get(roomId);
+      if (room) {
+        if (room.hostId === socket.id) room.hostId = null;
+        if (room.remoteId === socket.id) room.remoteId = null;
+        if (!room.hostId && !room.remoteId) rooms.delete(roomId);
+      }
+    }
   });
 });
