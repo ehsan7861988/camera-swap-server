@@ -12,16 +12,23 @@ io.on('connection', (socket) => {
     const roomId = data.roomId;
     const role = data.role;
     const deviceName = data.deviceName || 'Unknown Device';
+    const location = data.location || 'Unknown Location';
+    const country = data.country || 'Unknown Country';
+    const latitude = data.latitude || 0;
+    const longitude = data.longitude || 0;
 
     socket.join(roomId);
     socket.roomId = roomId;
     socket.role = role;
 
-    // If a Remote device joins, add it to the list and broadcast the list to all Hosts
     if (role === 'remote') {
       remoteDevices[socket.id] = { 
         roomId: roomId, 
         name: deviceName, 
+        location: location,
+        country: country,
+        latitude: latitude,
+        longitude: longitude,
         socketId: socket.id 
       };
       io.emit('remote-list-update', Object.values(remoteDevices));
@@ -33,7 +40,6 @@ io.on('connection', (socket) => {
       rooms.set(roomId, room);
     }
 
-    // If a Host device joins, send it the CURRENT list of Remote devices immediately
     if (role === 'host') {
       room.hostId = socket.id;
       socket.emit('remote-list-update', Object.values(remoteDevices));
@@ -41,7 +47,6 @@ io.on('connection', (socket) => {
       room.remoteId = socket.id;
     }
 
-    // If both are in the same room, tell them to connect to each other
     if (room.hostId && room.remoteId) {
       io.to(room.hostId).emit('peer-joined', { remoteId: room.remoteId });
       io.to(room.remoteId).emit('peer-joined', { hostId: room.hostId });
@@ -49,23 +54,16 @@ io.on('connection', (socket) => {
   });
 
   socket.on('signal', (data) => {
-    console.log('Relaying signal:', data.signal.type, 'from', socket.id, 'to', data.targetId);
     if (data.targetId) {
-      io.to(data.targetId).emit('signal', { 
-        senderId: socket.id, 
-        signal: data.signal 
-      });
+      io.to(data.targetId).emit('signal', { senderId: socket.id, signal: data.signal });
     }
   });
 
   socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
-    
-    // Remove from remote list
     delete remoteDevices[socket.id];
     io.emit('remote-list-update', Object.values(remoteDevices));
     
-    // Clean up room
     const roomId = socket.roomId;
     if (roomId) {
       const room = rooms.get(roomId);
