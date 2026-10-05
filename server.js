@@ -59,12 +59,23 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
+    socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
+
+    // Notify the other peer in the room
+    const roomId = socket.roomId;
+    if (roomId) {
+      if (socket.role === 'host') {
+        io.to(roomId).emit('peer-disconnected', { role: 'host' });
+      } else if (socket.role === 'remote') {
+        io.to(roomId).emit('peer-disconnected', { role: 'remote' });
+      }
+    }
+
     delete remoteDevices[socket.id];
     io.emit('remote-list-update', Object.values(remoteDevices));
-    
-    const roomId = socket.roomId;
+
+    // Clean up room
     if (roomId) {
       const room = rooms.get(roomId);
       if (room) {
