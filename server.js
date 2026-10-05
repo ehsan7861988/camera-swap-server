@@ -21,6 +21,7 @@ io.on('connection', (socket) => {
     socket.roomId = roomId;
     socket.role = role;
 
+    // Track remote devices for the list
     if (role === 'remote') {
       remoteDevices[socket.id] = { 
         roomId: roomId, 
@@ -34,6 +35,7 @@ io.on('connection', (socket) => {
       io.emit('remote-list-update', Object.values(remoteDevices));
     }
 
+    // Setup room
     let room = rooms.get(roomId);
     if (!room) {
       room = { hostId: null, remoteId: null };
@@ -42,11 +44,13 @@ io.on('connection', (socket) => {
 
     if (role === 'host') {
       room.hostId = socket.id;
+      // Send current device list to the newly joined host
       socket.emit('remote-list-update', Object.values(remoteDevices));
     } else if (role === 'remote') {
       room.remoteId = socket.id;
     }
 
+    // Notify both peers if they are now together in the room
     if (room.hostId && room.remoteId) {
       io.to(room.hostId).emit('peer-joined', { remoteId: room.remoteId });
       io.to(room.remoteId).emit('peer-joined', { hostId: room.hostId });
@@ -55,34 +59,41 @@ io.on('connection', (socket) => {
 
   socket.on('signal', (data) => {
     if (data.targetId) {
-      io.to(data.targetId).emit('signal', { senderId: socket.id, signal: data.signal });
+      io.to(data.targetId).emit('signal', { 
+        senderId: socket.id, 
+        signal: data.signal 
+      });
     }
   });
 
-    socket.on('disconnect', () => {
+  socket.on('disconnect', () => {
     console.log('Client disconnected:', socket.id);
 
-    // Notify the other peer in the room
     const roomId = socket.roomId;
-    if (roomId) {
-      if (socket.role === 'host') {
-        io.to(roomId).emit('peer-disconnected', { role: 'host' });
-      } else if (socket.role === 'remote') {
-        io.to(roomId).emit('peer-disconnected', { role: 'remote' });
-      }
-    }
+    const role = socket.role;
 
-    delete remoteDevices[socket.id];
-    io.emit('remote-list-update', Object.values(remoteDevices));
-
-    // Clean up room
     if (roomId) {
       const room = rooms.get(roomId);
+      
+      // Send peer-disconnected DIRECTLY to the other peer (not the room)
+      if (room) {
+        if (role === 'host' && room.remoteId) {
+          io.to(room.remoteId).emit('peer-disconnected', { role: 'host' });
+        } else if (role === 'remote' && room.hostId) {
+          io.to(room.hostId).emit('peer-disconnected', { role: 'remote' });
+        }
+      }
+
+      // Clean up the room
       if (room) {
         if (room.hostId === socket.id) room.hostId = null;
         if (room.remoteId === socket.id) room.remoteId = null;
         if (!room.hostId && !room.remoteId) rooms.delete(roomId);
       }
     }
+
+    // Remove from remote device list and broadcast
+    delete remoteDevices[socket.id];
+    io.emit('remote-list-update', Object.values(remoteDevices));
   });
 });
